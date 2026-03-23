@@ -6,7 +6,7 @@ info:
     Process one uploaded wafer Excel workbook and return the cleaned workbook
     plus a zip bundle of the step-by-step snapshots.
 servers:
-  - url: https://replace-me.example.com
+  - url: https://wafer-cleaner-api.onrender.com
     description: Replace with your deployed FastAPI base URL.
 paths:
   /run-wafer-cleaner:

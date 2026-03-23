@@ -16,7 +16,7 @@ key or OAuth layer to your deployed service.
 Open the GPT builder, add an Action, and paste the contents of `action-openapi.yaml`.
 Update:
 
-- `https://replace-me.example.com`
+- `https://wafer-cleaner-api.onrender.com`
 
 with your real deployed base URL.
 

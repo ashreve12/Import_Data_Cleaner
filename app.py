@@ -1,9 +1,10 @@
-from pathlib import Path
-from typing import List, Optional
 import base64
+import os
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
+from typing import List, Optional
 
 import requests
 from fastapi import FastAPI, HTTPException
@@ -13,8 +14,17 @@ from pydantic import BaseModel, ConfigDict, Field
 APP_DIR = Path(__file__).parent
 SCRIPT_PATH = APP_DIR / "process_wafer_workbook.py"
 MAX_FILE_BYTES = 10 * 1024 * 1024  # GPT Action return limit per file
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://wafer-cleaner-api.onrender.com").rstrip("/")
 
-app = FastAPI(title="Wafer Cleaner API", version="1.0.0")
+app = FastAPI(
+    title="Wafer Cleaner API",
+    version="1.0.0",
+    description=(
+        "Process one uploaded wafer Excel workbook and return the cleaned workbook "
+        "plus a zip bundle of the step-by-step snapshots."
+    ),
+    servers=[{"url": PUBLIC_BASE_URL, "description": "Public API base URL"}],
+)
 
 
 class OpenAIFileRef(BaseModel):
