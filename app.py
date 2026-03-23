@@ -8,6 +8,7 @@ from typing import List, Optional
 
 import requests
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -15,6 +16,7 @@ APP_DIR = Path(__file__).parent
 SCRIPT_PATH = APP_DIR / "process_wafer_workbook.py"
 MAX_FILE_BYTES = 10 * 1024 * 1024  # GPT Action return limit per file
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://wafer-cleaner-api.onrender.com").rstrip("/")
+CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "your-email@example.com")
 
 app = FastAPI(
     title="Wafer Cleaner API",
@@ -63,6 +65,27 @@ class RunResponse(BaseModel):
 @app.get("/health", include_in_schema=False)
 def health() -> dict[str, bool]:
     return {"ok": True}
+
+
+@app.get("/privacy", include_in_schema=False, response_class=HTMLResponse)
+def privacy_policy() -> str:
+    return f"""
+    <html>
+      <head>
+        <title>Privacy Policy</title>
+        <meta charset=\"utf-8\" />
+      </head>
+      <body>
+        <h1>Privacy Policy</h1>
+        <p>This service processes uploaded Excel workbooks and optional user inputs solely to run the wafer cleaner workflow and return output files.</p>
+        <p>Data processed may include uploaded workbook contents, filenames, optional zip names, and standard server logs.</p>
+        <p>Files are used only to complete the requested processing workflow and are not sold.</p>
+        <p>Data may be handled by infrastructure providers required to operate the service, including the hosting platform used to run this API.</p>
+        <p>Temporary files are created only for processing and should not be retained after the request finishes, except as needed for routine logs and platform operations.</p>
+        <p>Contact: {CONTACT_EMAIL}</p>
+      </body>
+    </html>
+    """
 
 
 def download_file(url: str, destination: Path) -> None:
