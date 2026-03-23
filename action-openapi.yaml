@@ -1,0 +1,109 @@
+openapi: 3.1.0
+info:
+  title: Wafer Cleaner API
+  version: 1.0.0
+  description: >-
+    Process one uploaded wafer Excel workbook and return the cleaned workbook
+    plus a zip bundle of the step-by-step snapshots.
+servers:
+  - url: https://replace-me.example.com
+    description: Replace with your deployed FastAPI base URL.
+paths:
+  /run-wafer-cleaner:
+    post:
+      operationId: runWaferCleaner
+      summary: Clean a wafer workbook and return output files.
+      description: >-
+        Clean one uploaded wafer workbook and return the processed Excel file
+        plus a zip bundle. The request must include exactly one workbook in
+        openaiFileIdRefs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                openaiFileIdRefs:
+                  type: array
+                  description: Exactly one uploaded Excel workbook from the conversation.
+                  minItems: 1
+                  maxItems: 1
+                  items:
+                    type: object
+                    additionalProperties: true
+                    properties:
+                      name:
+                        type: string
+                        description: Uploaded file name.
+                      id:
+                        type: string
+                        description: Stable OpenAI file identifier.
+                      mime_type:
+                        type: string
+                        description: Uploaded file MIME type.
+                      download_link:
+                        type: string
+                        format: uri
+                        description: Temporary download URL for the uploaded file.
+                    required:
+                      - name
+                      - id
+                      - mime_type
+                      - download_link
+                zip_name:
+                  type: string
+                  description: Optional zip filename for the returned output bundle.
+              required:
+                - openaiFileIdRefs
+      responses:
+        '200':
+          description: Cleaning completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  status:
+                    type: string
+                    description: Success status string.
+                  message:
+                    type: string
+                    description: Human-readable completion message.
+                  stdout:
+                    type: string
+                    description: Tail of the cleaner script stdout for debugging.
+                  openaiFileResponse:
+                    type: array
+                    description: Returned files for ChatGPT to attach to the conversation.
+                    minItems: 1
+                    maxItems: 2
+                    items:
+                      type: object
+                      additionalProperties: false
+                      properties:
+                        name:
+                          type: string
+                          description: File name visible to the user.
+                        mime_type:
+                          type: string
+                          description: MIME type for the returned file.
+                        content:
+                          type: string
+                          format: byte
+                          description: Base64 encoded file contents.
+                      required:
+                        - name
+                        - mime_type
+                        - content
+                required:
+                  - status
+                  - message
+                  - stdout
+                  - openaiFileResponse
+        '400':
+          description: Invalid request, bad upload, or download failure.
+        '500':
+          description: Server-side processing failure.
