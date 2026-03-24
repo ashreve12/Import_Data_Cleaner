@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 APP_DIR = Path(__file__).parent
 SCRIPT_PATH = APP_DIR / "process_wafer_workbook.py"
 MAX_FILE_BYTES = 10 * 1024 * 1024  # GPT Action return limit per file
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://wafer-cleaner-api.onrender.com").rstrip("/")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://wafer-cleaner-api-production.up.railway.app").rstrip("/")
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "your-email@example.com")
 
 app = FastAPI(

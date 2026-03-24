@@ -4,7 +4,7 @@
 
 ChatGPT Actions cannot call `http://127.0.0.1:8000` or any other localhost URL.
 Deploy the FastAPI app to a public HTTPS URL first, then replace the placeholder
-server URL in `action-openapi.yaml`. The server origin must exactly match your deployed HTTPS origin, for example `https://wafer-cleaner-api.onrender.com`.
+server URL in `action-openapi.yaml`. The server origin must exactly match your deployed HTTPS origin, for example `https://wafer-cleaner-api-production.up.railway.app`.
 
 ## 2. Use no authentication first
 
@@ -16,7 +16,7 @@ key or OAuth layer to your deployed service.
 Open the GPT builder, add an Action, and paste the contents of `action-openapi.yaml`.
 Update:
 
-- `https://wafer-cleaner-api.onrender.com`
+- `https://wafer-cleaner-api-production.up.railway.app`
 
 with your real deployed base URL.
 
