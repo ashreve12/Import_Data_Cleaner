@@ -1,0 +1,636 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wafer Cleaner Upload</title>
+  <style>
+    :root {
+      --bg-top: #f4f7fa;
+      --bg-bottom: #e5edf4;
+      --panel: rgba(255, 255, 255, 0.94);
+      --ink: #17324d;
+      --muted: #5c6f82;
+      --accent: #0f5fa8;
+      --accent-strong: #0b487f;
+      --accent-soft: #dce9f8;
+      --border: #cad7e2;
+      --success-bg: #e7f5ec;
+      --success-ink: #1d6c44;
+      --error-bg: #fdecec;
+      --error-ink: #9a2f2f;
+      --info-bg: #e9f1fb;
+      --info-ink: #154d82;
+      --shadow: 0 20px 44px rgba(23, 50, 77, 0.12);
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Trebuchet MS", Verdana, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at top right, rgba(15, 95, 168, 0.16), transparent 36%),
+        radial-gradient(circle at bottom left, rgba(11, 72, 127, 0.08), transparent 30%);
+      pointer-events: none;
+    }
+
+    main {
+      position: relative;
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 40px 20px 72px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(202, 215, 226, 0.9);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero {
+      padding: 32px 32px 22px;
+      background: linear-gradient(135deg, rgba(220, 233, 248, 0.85), rgba(255, 255, 255, 0.98));
+      border-bottom: 1px solid rgba(202, 215, 226, 0.9);
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      font-size: 0.82rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent-strong);
+      font-weight: 700;
+    }
+
+    h1,
+    h2,
+    h3 {
+      font-family: Georgia, "Times New Roman", serif;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+
+    .hero p,
+    .support-note,
+    .field-help,
+    .status,
+    .result-copy,
+    .expiry-note {
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .hero p {
+      max-width: 720px;
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .content {
+      padding: 28px 32px 34px;
+    }
+
+    .support-note {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 24px;
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 250, 0.96));
+    }
+
+    .support-note strong {
+      color: var(--ink);
+    }
+
+    form {
+      display: grid;
+      gap: 22px;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .field {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    input[type="text"],
+    input[type="file"] {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: #ffffff;
+      color: var(--ink);
+      padding: 14px 16px;
+      font: inherit;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    input[type="file"] {
+      padding: 12px;
+    }
+
+    input:focus,
+    button:focus,
+    .download-link:focus {
+      outline: 3px solid rgba(15, 95, 168, 0.18);
+      outline-offset: 2px;
+    }
+
+    input:hover,
+    input:focus {
+      border-color: rgba(15, 95, 168, 0.5);
+      box-shadow: 0 0 0 4px rgba(15, 95, 168, 0.08);
+    }
+
+    .field-help {
+      margin: 0;
+      font-size: 0.94rem;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+      color: #ffffff;
+      font: inherit;
+      font-weight: 700;
+      padding: 14px 24px;
+      cursor: pointer;
+      box-shadow: 0 12px 24px rgba(15, 95, 168, 0.22);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 28px rgba(15, 95, 168, 0.28);
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.75;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .status {
+      display: none;
+      margin-top: 6px;
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      font-weight: 600;
+    }
+
+    .status.visible {
+      display: block;
+      animation: rise-in 0.24s ease;
+    }
+
+    .status.info {
+      background: var(--info-bg);
+      border-color: rgba(15, 95, 168, 0.16);
+      color: var(--info-ink);
+    }
+
+    .status.success {
+      background: var(--success-bg);
+      border-color: rgba(29, 108, 68, 0.16);
+      color: var(--success-ink);
+    }
+
+    .status.error {
+      background: var(--error-bg);
+      border-color: rgba(154, 47, 47, 0.16);
+      color: var(--error-ink);
+    }
+
+    .results {
+      margin-top: 28px;
+      padding-top: 28px;
+      border-top: 1px solid rgba(202, 215, 226, 0.9);
+      animation: rise-in 0.26s ease;
+    }
+
+    .results[hidden] {
+      display: none;
+    }
+
+    .results-header {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .result-copy {
+      margin: 0;
+    }
+
+    .results-grid {
+      display: grid;
+      gap: 22px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .results-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 250, 0.98));
+      padding: 20px;
+    }
+
+    .results-card h3 {
+      margin-bottom: 14px;
+      font-size: 1.25rem;
+    }
+
+    .downloads,
+    .summary-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .download-link {
+      display: grid;
+      gap: 6px;
+      text-decoration: none;
+      color: var(--ink);
+      border: 1px solid rgba(15, 95, 168, 0.16);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      background: linear-gradient(180deg, rgba(220, 233, 248, 0.52), rgba(255, 255, 255, 0.96));
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .download-link:hover,
+    .download-link:focus {
+      transform: translateY(-1px);
+      border-color: rgba(15, 95, 168, 0.35);
+      box-shadow: 0 12px 20px rgba(15, 95, 168, 0.12);
+    }
+
+    .download-link span {
+      font-size: 0.94rem;
+      color: var(--accent-strong);
+      font-weight: 700;
+    }
+
+    .download-link strong {
+      font-size: 1rem;
+    }
+
+    .summary-grid {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .summary-item {
+      display: grid;
+      gap: 8px;
+      border: 1px solid rgba(202, 215, 226, 0.95);
+      border-radius: var(--radius-sm);
+      background: #ffffff;
+      padding: 16px;
+      min-height: 112px;
+    }
+
+    .summary-label {
+      font-size: 0.92rem;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .summary-value {
+      font-size: 1.5rem;
+      line-height: 1.1;
+      color: var(--ink);
+    }
+
+    .expiry-note {
+      margin: 14px 0 0;
+      font-size: 0.92rem;
+    }
+
+    @keyframes rise-in {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 760px) {
+      main {
+        padding: 20px 14px 40px;
+      }
+
+      .hero,
+      .content {
+        padding: 22px 18px;
+      }
+
+      .form-grid,
+      .results-grid {
+        grid-template-columns: 1fr;
+      }
+
+      button {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="panel" aria-labelledby="pageTitle">
+      <header class="hero">
+        <p class="eyebrow">Browser Upload</p>
+        <h1 id="pageTitle">Wafer Cleaner</h1>
+        <p>Upload one Excel workbook, optionally rename the zip bundle, and download the cleaned outputs when processing finishes. This page uses the same backend workflow as the Custom GPT.</p>
+      </header>
+
+      <div class="content">
+        <div class="support-note" aria-label="Upload guidance">
+          <div><strong>Accepted workbook formats:</strong> .xlsx, .xlsm, .xltx, and .xltm</div>
+          <div><strong>One workbook per run:</strong> the cleaned workbook and zip bundle will be prepared together.</div>
+        </div>
+
+        <form id="waferForm" novalidate>
+          <div class="form-grid">
+            <div class="field full">
+              <label for="workbook">Excel workbook</label>
+              <input id="workbook" name="workbook" type="file" accept=".xlsx,.xlsm,.xltx,.xltm" required>
+              <p class="field-help">Choose a single workbook file. Files that are not Excel workbooks will be rejected before upload.</p>
+            </div>
+
+            <div class="field full">
+              <label for="zipName">Optional zip filename</label>
+              <input id="zipName" name="zipName" type="text" maxlength="120" placeholder="Example: wafer_outputs_march_2026">
+              <p class="field-help">Leave this blank to use the default zip name generated by the cleaner.</p>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="processButton" type="submit">Process workbook</button>
+          </div>
+
+          <div id="statusMessage" class="status" role="status" aria-live="polite"></div>
+        </form>
+
+        <section id="results" class="results" hidden>
+          <div class="results-header">
+            <h2>Processing results</h2>
+            <p id="resultMessage" class="result-copy"></p>
+          </div>
+
+          <div class="results-grid">
+            <article class="results-card">
+              <h3>Downloads</h3>
+              <div id="downloadLinks" class="downloads"></div>
+              <p id="expiryNote" class="expiry-note"></p>
+            </article>
+
+            <article class="results-card">
+              <h3>Summary</h3>
+              <div id="summaryGrid" class="summary-grid"></div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("waferForm");
+    const workbookInput = document.getElementById("workbook");
+    const zipNameInput = document.getElementById("zipName");
+    const processButton = document.getElementById("processButton");
+    const statusMessage = document.getElementById("statusMessage");
+    const results = document.getElementById("results");
+    const resultMessage = document.getElementById("resultMessage");
+    const downloadLinks = document.getElementById("downloadLinks");
+    const summaryGrid = document.getElementById("summaryGrid");
+    const expiryNote = document.getElementById("expiryNote");
+
+    const allowedExtensions = ["xlsx", "xlsm", "xltx", "xltm"];
+
+    function showStatus(message, tone) {
+      statusMessage.textContent = message;
+      statusMessage.className = `status visible ${tone}`;
+    }
+
+    function clearStatus() {
+      statusMessage.textContent = "";
+      statusMessage.className = "status";
+    }
+
+    function setBusy(isBusy) {
+      processButton.disabled = isBusy;
+      workbookInput.disabled = isBusy;
+      zipNameInput.disabled = isBusy;
+      processButton.textContent = isBusy ? "Processing workbook..." : "Process workbook";
+    }
+
+    function isValidWorkbook(file) {
+      if (!file || !file.name.includes(".")) {
+        return false;
+      }
+
+      const extension = file.name.split(".").pop().toLowerCase();
+      return allowedExtensions.includes(extension);
+    }
+
+    function formatExpiry(value) {
+      if (!value) {
+        return "";
+      }
+
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return value;
+      }
+
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(parsed);
+    }
+
+    function extractErrorMessage(payload, response) {
+      if (typeof payload?.detail === "string") {
+        return payload.detail;
+      }
+
+      if (payload?.detail?.message) {
+        return payload.detail.message;
+      }
+
+      if (payload?.message) {
+        return payload.message;
+      }
+
+      return `Request failed with status ${response.status}.`;
+    }
+
+    function renderDownloads(downloads) {
+      downloadLinks.innerHTML = "";
+
+      downloads.forEach((item) => {
+        const link = document.createElement("a");
+        link.className = "download-link";
+        link.href = item.url;
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.download = item.name;
+
+        const label = document.createElement("span");
+        label.textContent = item.label;
+
+        const name = document.createElement("strong");
+        name.textContent = item.name;
+
+        link.append(label, name);
+        downloadLinks.appendChild(link);
+      });
+    }
+
+    function renderSummary(summaryItems) {
+      summaryGrid.innerHTML = "";
+
+      summaryItems.forEach((item) => {
+        const card = document.createElement("div");
+        card.className = "summary-item";
+
+        const label = document.createElement("div");
+        label.className = "summary-label";
+        label.textContent = item.label;
+
+        const value = document.createElement("strong");
+        value.className = "summary-value";
+        value.textContent = item.value;
+
+        card.append(label, value);
+        summaryGrid.appendChild(card);
+      });
+    }
+
+    workbookInput.addEventListener("change", () => {
+      const file = workbookInput.files?.[0];
+
+      if (file && !isValidWorkbook(file)) {
+        workbookInput.value = "";
+        showStatus("Please choose an Excel workbook in .xlsx, .xlsm, .xltx, or .xltm format.", "error");
+        return;
+      }
+
+      clearStatus();
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      results.hidden = true;
+      clearStatus();
+
+      const file = workbookInput.files?.[0];
+      if (!file) {
+        showStatus("Choose one Excel workbook before you start processing.", "error");
+        return;
+      }
+
+      if (!isValidWorkbook(file)) {
+        showStatus("Please choose an Excel workbook in .xlsx, .xlsm, .xltx, or .xltm format.", "error");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("workbook", file);
+
+      const zipName = zipNameInput.value.trim();
+      if (zipName) {
+        formData.append("zip_name", zipName);
+      }
+
+      setBusy(true);
+      showStatus("Processing workbook. This may take a moment depending on the file size.", "info");
+
+      try {
+        const response = await fetch("/upload-wafer-cleaner", {
+          method: "POST",
+          body: formData,
+        });
+
+        const contentType = response.headers.get("content-type") || "";
+        const payload = contentType.includes("application/json")
+          ? await response.json()
+          : { message: await response.text() };
+
+        if (!response.ok) {
+          throw new Error(extractErrorMessage(payload, response));
+        }
+
+        renderDownloads(payload.downloads || []);
+        renderSummary(payload.summary || []);
+        resultMessage.textContent = payload.message || "Processing completed successfully.";
+        expiryNote.textContent = payload.expires_at
+          ? `Download links are held temporarily until ${formatExpiry(payload.expires_at)}.`
+          : "Download links are held temporarily by the service.";
+        results.hidden = false;
+        showStatus("Processing complete. Your files are ready to download.", "success");
+      } catch (error) {
+        showStatus(error.message || "Something went wrong while processing the workbook.", "error");
+      } finally {
+        setBusy(false);
+      }
+    });
+  </script>
+</body>
+</html>

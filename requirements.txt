@@ -1,5 +1,1 @@
-fastapi
-uvicorn[standard]
-requests
-python-multipart
-openpyxl
+﻿-r ChatGPT/requirements.txt
