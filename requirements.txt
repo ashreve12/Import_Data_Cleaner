@@ -1,1 +1,5 @@
-﻿-r ChatGPT/requirements.txt
+﻿fastapi
+uvicorn[standard]
+requests
+python-multipart
+openpyxl
