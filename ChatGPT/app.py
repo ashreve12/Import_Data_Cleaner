@@ -1,26 +1,29 @@
 ﻿import base64
+import json as _json
 import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, List, Literal, Optional
 
 import requests
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 
 APP_DIR = Path(__file__).parent
 WORKSPACE_ROOT = APP_DIR.parents[1]
-WAFER_SCRIPT_PATH = APP_DIR / "process_wafer_workbook.py"
+WAFER_SCRIPT_PATH = APP_DIR.parent / "process_wafer_workbook.py"
 CELL_SCRIPT_PATH = WORKSPACE_ROOT / "Cell Cleaner" / "process_cell_workbook.py"
 MODULE_SCRIPT_PATH = WORKSPACE_ROOT / "Module Cleaner" / "process_module_workbook.py"
+MERGE_SCRIPT_PATH = APP_DIR.parent / "process_merge_workbooks.py"
 HTML_PAGE_PATH = APP_DIR / "static" / "wafer_cleaner.html"
 MAX_FILE_BYTES = 10 * 1024 * 1024  # GPT Action return limit per file
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://wafer-cleaner-api-production.up.railway.app").rstrip("/")
@@ -37,12 +40,10 @@ JOB_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 SUMMARY_FIELD_LABELS = [
     ("initial_data_rows", "Initial data rows"),
     ("step1_removed_hs_code_rows", "Removed at step 1 (HS 4+)"),
-    ("step2a_removed_supplier_rows", "Removed at step 2a (supplier patterns)"),
-    ("step2b_removed_dimension_rows", "Removed at step 2b (dimension filters)"),
+    ("step2_removed_supplier_rows", "Removed at step 2 (supplier filter)"),
     ("step2_removed_name_rows", "Removed at step 2 (name filters)"),
     ("step2_removed_keyword_rows", "Removed at step 2 (keyword filters)"),
-    ("step3_removed_non_wafer_rows", "Removed at step 3 (non-wafer rows)"),
-    ("step3_removed_irrelevant_rows", "Removed at step 3 (irrelevant terms)"),
+    ("step3_removed_rows", "Removed at step 3 (non-wafer / exclusion terms)"),
     ("step3_removed_keyword_rows", "Removed at step 3 (keyword filters)"),
     ("final_rows_left", "Final rows left"),
 ]
@@ -67,6 +68,118 @@ BROWSER_CLEANER_OPTIONS = {
     },
 }
 DEFAULT_BROWSER_CLEANER = "wafer-imports"
+
+KEYWORDS_PATH = WORKSPACE_ROOT / "keywords.json"
+
+BUILTIN_KEYWORDS: dict[str, dict[str, dict]] = {
+    "wafer": {
+        "supplier_patterns": {
+            "label": "Supplier / Company Exclusions",
+            "help": "Rows whose Shipper Declared or Consignee Declared contains any of these names are removed.",
+            "values": [
+                "ESWIN", "Shin-Etsu", "SEH AMERICA", "S.E.H. AMERICA",
+                "Zing Semiconductor", "SK SILTRON", "silicon valley",
+                "Helitek Company", "WAFER WORKS CORPORATION", "A1 SILICON",
+                "A-1 SILCON INC.", "SILTRONIC", "WAFERNET", "ECHEM SOLUTIONS",
+                "XXX semiconductor", "SOUTHWEST SILICON", "SemiStar Corp",
+                "PURE WAFER", "SAMSUNG AUSTIN SEMICONDUCTOR",
+                "LUMENTUM OPERATIONS LLC", "Ramco Technology",
+                "SCIENTECH CORPORATION", "Formosa Sumco Technology Corporation",
+                "West European Silicon Technologies",
+                "TEKNICAL MATERIAL RECYCLING", "INC. RAMCO TECHNOLOGY INC",
+                "SOITEC", "LUXFER MEL TECHNOLOGIES",
+                "WEST EUROPEAN SILICON TECH", "MEMC", "FOODS", "WOLFSPEED",
+                "KINIK COMPANY", "FORMOSA SUMCO",
+            ],
+        },
+        "exclude_terms": {
+            "label": "Description Exclusion Terms",
+            "help": "Rows whose container description contains any of these terms are removed (after the WAFER keep filter).",
+            "values": [
+                "Semi", "SEMI CONDUCTOR", "CLEANING", "ADDITIVE", "TEXTURING",
+                "Coating", "agent", "OVEN", "GALLIUM ARSENIDE", "Mixed",
+                "CUTTING", "COOLANT", "MIXED", "RECYCLE", "RECLAIM", "SEED",
+                "TAPE", "WAFFY", "COOKIES", "cakes", "peeler",
+            ],
+        },
+    },
+    "cell": {
+        "name_patterns": {
+            "label": "Company Name Exclusions",
+            "help": "Rows whose Shipper Declared or Consignee Declared contains any of these names are removed.",
+            "values": ["First Solar", "FS Solar", "Space Exploration", "SpaceX"],
+        },
+        "description_keywords": {
+            "label": "Description Keywords",
+            "help": "Rows whose container description contains any of these keywords are removed.",
+            "values": [
+                "accessory", "accessories", "additive", "aluminum", "amorphous",
+                "amplifier", "apparatus", "baby", "backsheet", "battery", "bifacial",
+                "boxes", "bracket", "blanket", "bug trap", "camera", "carrier",
+                "charger", "chip", "circuit", "clay", "cleaning", "coil",
+                "conditioner", "connector", "construction", "control", "controller",
+                "conduct", "convertor", "cooking", "coupler", "children", "crystal",
+                "current", "daughter card", "decoration", "diodes", "doors",
+                "electronic products", "encoder", "emitting", "equipment", "filter",
+                "film", "flexible", "foil", "fold", "fountain", "frame", "furniture",
+                "glass", "hand wash", "heat", "heater", "igniter", "infrared",
+                "insulation", "inverter", "igbt", "junction", "jewelry", "kit",
+                "laminator", "lamping", "laser", "light", "lithium", "machine",
+                "main amp", "material", "men's", "module", "mount", "mounting",
+                "neutral bar", "off-grid", "outdoor", "packaging", "panel", "part",
+                "plastic", "portable", "polyester", "power", "piezo", "photocell",
+                "production line", "photo cell", "rectifier", "rubber", "scissor",
+                "seal", "sealing", "semiconductor", "sensor", "shaver", "simulator",
+                "smart", "solar light", "steel", "supply", "system", "thyristor",
+                "tool", "tracking", "transducer", "transformer", "transistor",
+                "tshirt", "t-shirt", "tube", "underwear", "wire",
+            ],
+        },
+        "boundary_keywords": {
+            "label": "Boundary Keywords (whole-word match)",
+            "help": "Removed when found as whole words in the container description (e.g. LED won't match FLED).",
+            "values": ["LED", "EVA", "USB"],
+        },
+    },
+    "module": {
+        "company_exclusions": {
+            "label": "Company Exclusions",
+            "help": "Rows whose Shipper Declared or Consignee Declared contains any of these names are removed.",
+            "values": ["extrusion", "SEOUL", "VON ARDENNE", "FHR ANLAGENBAU"],
+        },
+        "description_keywords": {
+            "label": "Description Keywords",
+            "help": "Rows whose container description contains any of these keywords are removed.",
+            "values": [
+                "accessory", "accessories", "additive", "aluminum", "amorphous",
+                "amplifier", "apparatus", "baby", "backsheet", "battery", "boxes",
+                "bracket", "branket", "bug trap", "camera", "carrier", "charger",
+                "chip", "circuit", "clay", "cleaning", "coil", "conditioner",
+                "connector", "construction", "control", "controller", "conduct",
+                "convertor", "cooking", "coupler", "children", "crystal", "current",
+                "daughter card", "decoration", "diodes", "doors", "electronic products",
+                "encoder", "emitting", "equipment", "filter", "film", "flexible",
+                "foil", "fold", "for solar", "fountain", "frame", "furniture", "glass",
+                "hand wash", "heat", "heater", "igniter", "infrared", "insulation",
+                "inverter", "igbt", "junction", "jewelry", "kit", "laminator",
+                "lamping", "laser", "light", "lithium", "machine", "main amp",
+                "material", "men's", "mount", "mounting", "neutral bar", "off-grid",
+                "outdoor", "packaging", "part", "plastic", "portable", "polyester",
+                "power", "piezo", "photocell", "photo cell", "production line",
+                "rectifier", "rubber", "ribbon", "scissor", "seal", "sealing",
+                "semiconductor", "sensor", "shaver", "simulator", "smart",
+                "solar light", "sport", "steel", "supply", "system", "thyristor",
+                "tool", "toy", "tracking", "transducer", "transformer", "transistor",
+                "tshirt", "t-shirt", "tube", "underwear", "wire",
+            ],
+        },
+        "boundary_exclusions": {
+            "label": "Boundary Exclusions (whole-word match)",
+            "help": "Removed when found as whole words in the container description.",
+            "values": ["LED", "EVA", "USB"],
+        },
+    },
+}
 
 
 app = FastAPI(
@@ -132,6 +245,98 @@ class BrowserRunResponse(BaseModel):
     expires_at: str
     summary: List[BrowserSummaryItem]
     downloads: List[BrowserDownloadItem]
+
+
+class MergeSummaryItem(BaseModel):
+    label: str
+    value: str
+
+
+class KeywordBody(BaseModel):
+    keyword: str
+
+
+class MergeRunResponse(BaseModel):
+    status: str
+    message: str
+    job_id: str
+    expires_at: str
+    summary: List[MergeSummaryItem]
+    downloads: List[BrowserDownloadItem]
+
+
+def _read_custom_keywords() -> dict:
+    if not KEYWORDS_PATH.exists():
+        return {}
+    try:
+        return _json.loads(KEYWORDS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _write_custom_keywords(data: dict) -> None:
+    KEYWORDS_PATH.write_text(_json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+# In-memory store for background merge jobs: job_id → status dict
+_merge_jobs: dict[str, dict] = {}
+_merge_jobs_lock = threading.Lock()
+
+
+def _run_merge_job(
+    job_id: str,
+    source_paths: list,
+    dest_in_path: Path,
+    output_path: Path,
+    source_dir: Path,
+    dest_sheet_name: str | None,
+    source_names: list,
+) -> None:
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("process_merge_workbooks", MERGE_SCRIPT_PATH)
+    _mod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+
+    try:
+        # Merge all sources into dest in a single pass — dest loaded once, sources streamed
+        result = _mod.merge_all_workbooks(
+            source_paths=source_paths,
+            dest_path=dest_in_path,
+            output_path=output_path,
+            dest_sheet_name=dest_sheet_name or None,
+        )
+
+        expires_at = (
+            datetime.now(timezone.utc) + timedelta(hours=BROWSER_JOB_TTL_HOURS)
+        ).isoformat()
+
+        total_rows = result["rows_added"]
+        summary = [
+            {"label": "Files merged",             "value": str(len(source_paths))},
+            {"label": "Total rows added",         "value": str(total_rows)},
+            {"label": "Destination sheet",        "value": result.get("destination_sheet", "")},
+            {"label": "Destination table",        "value": result.get("destination_table", "none")},
+            {"label": "Matched columns",          "value": str(result.get("matched_columns", ""))},
+            {"label": "Formula columns adjusted", "value": str(result.get("formula_columns_adjusted", ""))},
+            {"label": "Source files",             "value": ", ".join(source_names)},
+        ]
+
+        with _merge_jobs_lock:
+            _merge_jobs[job_id] = {
+                "status": "complete",
+                "message": (
+                    f"Merge complete. {total_rows} row(s) added across "
+                    f"{len(source_paths)} file(s) into "
+                    f"'{result.get('destination_sheet', 'the destination sheet')}'."
+                ),
+                "summary": summary,
+                "download_url": f"/download-merge-result/{job_id}",
+                "download_name": output_path.name,
+                "expires_at": expires_at,
+            }
+    except Exception as exc:
+        with _merge_jobs_lock:
+            _merge_jobs[job_id] = {"status": "error", "message": str(exc)}
 
 
 @app.get("/health", include_in_schema=False)
@@ -540,3 +745,199 @@ def download_wafer_cleaner_artifact(
         media_type=media_type,
         filename=file_path.name,
     )
+
+
+# ---------------------------------------------------------------------------
+# Merge workbooks endpoint
+# ---------------------------------------------------------------------------
+
+MERGE_SUMMARY_FIELD_LABELS = [
+    ("rows_added", "Rows added"),
+    ("matched_columns", "Matched columns"),
+    ("formula_columns_adjusted", "Formula columns adjusted"),
+    ("source_sheet", "Source sheet"),
+    ("destination_sheet", "Destination sheet"),
+    ("destination_table", "Destination table"),
+]
+
+
+@app.post("/upload-merge-workbooks", summary="Merge up to 3 cleaned workbooks into a destination master workbook.")
+def upload_merge_workbooks(
+    background_tasks: BackgroundTasks,
+    source_workbooks: List[UploadFile] = File(..., description="Up to 3 cleaned output workbooks."),
+    dest_workbook: UploadFile = File(..., description="Master destination workbook to merge into."),
+    dest_sheet_name: Optional[str] = Form(default=None, description="Sheet name in the destination workbook (leave blank to use the active sheet)."),
+) -> dict:
+    cleanup_expired_browser_jobs()
+
+    if not source_workbooks:
+        raise HTTPException(status_code=400, detail="At least one source workbook is required.")
+    if len(source_workbooks) > 3:
+        raise HTTPException(status_code=400, detail="Upload at most 3 source workbooks at a time.")
+    for upload in source_workbooks:
+        if not upload.filename or not is_excel_filename(upload.filename):
+            raise HTTPException(status_code=400, detail=f"'{upload.filename}' is not a supported Excel workbook.")
+    if not dest_workbook.filename or not is_excel_filename(dest_workbook.filename):
+        raise HTTPException(status_code=400, detail="Destination file must be an Excel workbook.")
+
+    job_id = uuid.uuid4().hex
+    job_dir = ensure_browser_job_root() / job_id
+    source_dir = job_dir / "source"
+    output_dir = job_dir / "output"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = output_dir / Path(dest_workbook.filename).name
+
+    try:
+        dest_in_path = source_dir / Path(dest_workbook.filename).name
+        with dest_in_path.open("wb") as fh:
+            shutil.copyfileobj(dest_workbook.file, fh)
+
+        source_paths: list[Path] = []
+        source_names: list[str] = []
+        for upload in source_workbooks:
+            p = source_dir / Path(upload.filename).name
+            if p in source_paths:
+                p = source_dir / f"{p.stem}_{len(source_paths)}{p.suffix}"
+            with p.open("wb") as fh:
+                shutil.copyfileobj(upload.file, fh)
+            source_paths.append(p)
+            source_names.append(Path(upload.filename).name)
+    except Exception as exc:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save uploaded files: {exc}") from exc
+    finally:
+        dest_workbook.file.close()
+        for upload in source_workbooks:
+            upload.file.close()
+
+    with _merge_jobs_lock:
+        _merge_jobs[job_id] = {"status": "processing"}
+
+    background_tasks.add_task(
+        _run_merge_job,
+        job_id, source_paths, dest_in_path, output_path, source_dir,
+        dest_sheet_name, source_names,
+    )
+
+    return {"status": "processing", "job_id": job_id}
+
+
+@app.get("/merge-status/{job_id}", include_in_schema=False)
+def merge_status(job_id: str) -> dict:
+    if not JOB_ID_PATTERN.match(job_id):
+        raise HTTPException(status_code=400, detail="Invalid job ID.")
+    with _merge_jobs_lock:
+        job = _merge_jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    return job
+
+
+@app.get("/download-merge-result/{job_id}", include_in_schema=False)
+def download_merge_result(job_id: str) -> FileResponse:
+    cleanup_expired_browser_jobs()
+    job_dir = resolve_browser_job_dir(job_id)
+    output_dir = job_dir / "output"
+
+    candidates = [p for p in output_dir.iterdir() if p.is_file() and p.suffix.lower() in EXCEL_SUFFIXES]
+    if not candidates:
+        raise HTTPException(status_code=404, detail="Merged workbook is no longer available.")
+
+    file_path = max(candidates, key=lambda p: p.stat().st_mtime)
+    return FileResponse(
+        path=file_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=file_path.name,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Keyword editor endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/keywords/{cleaner_type}", include_in_schema=False)
+def get_keywords(cleaner_type: str) -> dict:
+    if cleaner_type not in BUILTIN_KEYWORDS:
+        raise HTTPException(status_code=404, detail=f"Unknown cleaner type: {cleaner_type}")
+    custom_data = _read_custom_keywords()
+    cleaner_custom = custom_data.get(cleaner_type, {})
+    lists = []
+    for list_name, meta in BUILTIN_KEYWORDS[cleaner_type].items():
+        entry = cleaner_custom.get(list_name, {})
+        if isinstance(entry, list):
+            custom_kws, removed_kws = entry, []
+        else:
+            custom_kws = entry.get("custom", [])
+            removed_kws = entry.get("removed", [])
+        lists.append({
+            "name": list_name,
+            "label": meta["label"],
+            "help": meta["help"],
+            "builtin": meta["values"],
+            "custom": custom_kws,
+            "removed": removed_kws,
+        })
+    return {"cleaner_type": cleaner_type, "lists": lists}
+
+
+@app.post("/keywords/{cleaner_type}/{list_name}", include_in_schema=False)
+def add_keyword(cleaner_type: str, list_name: str, body: KeywordBody) -> dict:
+    if cleaner_type not in BUILTIN_KEYWORDS:
+        raise HTTPException(status_code=404, detail=f"Unknown cleaner type: {cleaner_type}")
+    if list_name not in BUILTIN_KEYWORDS[cleaner_type]:
+        raise HTTPException(status_code=404, detail=f"Unknown list: {list_name}")
+    keyword = body.keyword.strip()
+    if not keyword:
+        raise HTTPException(status_code=400, detail="keyword must not be empty")
+    custom_data = _read_custom_keywords()
+    entry = custom_data.setdefault(cleaner_type, {}).setdefault(list_name, {})
+    if isinstance(entry, list):
+        entry = {"custom": entry, "removed": []}
+        custom_data[cleaner_type][list_name] = entry
+    kw_list = entry.setdefault("custom", [])
+    if keyword not in kw_list:
+        kw_list.append(keyword)
+        _write_custom_keywords(custom_data)
+    return {"ok": True, "keyword": keyword}
+
+
+@app.delete("/keywords/{cleaner_type}/{list_name}", include_in_schema=False)
+def delete_keyword(cleaner_type: str, list_name: str, keyword: str) -> dict:
+    """Remove a custom keyword or hide a built-in keyword."""
+    if cleaner_type not in BUILTIN_KEYWORDS:
+        raise HTTPException(status_code=404, detail=f"Unknown cleaner type: {cleaner_type}")
+    builtin_values = BUILTIN_KEYWORDS[cleaner_type].get(list_name, {}).get("values", [])
+    custom_data = _read_custom_keywords()
+    entry = custom_data.setdefault(cleaner_type, {}).setdefault(list_name, {})
+    if isinstance(entry, list):
+        entry = {"custom": entry, "removed": []}
+        custom_data[cleaner_type][list_name] = entry
+    if keyword in builtin_values:
+        removed = entry.setdefault("removed", [])
+        if keyword not in removed:
+            removed.append(keyword)
+            _write_custom_keywords(custom_data)
+    else:
+        kw_list = entry.setdefault("custom", [])
+        if keyword in kw_list:
+            kw_list.remove(keyword)
+            _write_custom_keywords(custom_data)
+    return {"ok": True}
+
+
+@app.post("/keywords/{cleaner_type}/{list_name}/restore", include_in_schema=False)
+def restore_keyword(cleaner_type: str, list_name: str, body: KeywordBody) -> dict:
+    """Restore a previously removed built-in keyword."""
+    if cleaner_type not in BUILTIN_KEYWORDS:
+        raise HTTPException(status_code=404, detail=f"Unknown cleaner type: {cleaner_type}")
+    keyword = body.keyword.strip()
+    custom_data = _read_custom_keywords()
+    entry = custom_data.get(cleaner_type, {}).get(list_name, {})
+    if isinstance(entry, dict):
+        removed = entry.get("removed", [])
+        if keyword in removed:
+            removed.remove(keyword)
+            _write_custom_keywords(custom_data)
+    return {"ok": True}

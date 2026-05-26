@@ -392,6 +392,174 @@
       }
     }
 
+    .panel + .panel {
+      margin-top: 32px;
+    }
+
+    .section-divider {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 22px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .section-divider::before,
+    .section-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .optional-fields {
+      display: grid;
+      gap: 16px;
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,247,250,0.96));
+    }
+
+    .optional-fields summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--accent-strong);
+      font-size: 0.95rem;
+      user-select: none;
+    }
+
+    .optional-fields[open] summary {
+      margin-bottom: 14px;
+    }
+
+    /* ── Keyword editor ── */
+    .kw-list-section {
+      margin-bottom: 28px;
+    }
+
+    .kw-list-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .kw-help {
+      margin: 0 0 12px;
+      font-size: 0.94rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .kw-builtin-wrap {
+      margin-bottom: 16px;
+    }
+
+    .kw-builtin-wrap summary {
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--muted);
+      user-select: none;
+      margin-bottom: 10px;
+    }
+
+    .kw-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: rgba(244, 247, 250, 0.7);
+      min-height: 44px;
+    }
+
+    .kw-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      line-height: 1;
+      font-weight: 600;
+    }
+
+    .kw-tag--builtin {
+      background: rgba(202, 215, 226, 0.5);
+      color: var(--muted);
+      border: 1px solid rgba(202, 215, 226, 0.9);
+    }
+
+    .kw-tag--custom {
+      background: rgba(220, 233, 248, 0.8);
+      color: var(--accent-strong);
+      border: 1px solid rgba(15, 95, 168, 0.2);
+    }
+
+    .kw-tag--removed {
+      background: rgba(253, 236, 236, 0.8);
+      color: var(--error-ink);
+      border: 1px solid rgba(154, 47, 47, 0.18);
+      text-decoration: line-through;
+    }
+
+    .kw-remove {
+      appearance: none;
+      border: none;
+      background: none;
+      color: inherit;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0;
+      box-shadow: none;
+      border-radius: 0;
+      font-weight: 700;
+      opacity: 0.7;
+      transition: opacity 0.15s;
+    }
+
+    .kw-remove:hover {
+      opacity: 1;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .kw-custom-label {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+
+    .kw-add-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .kw-add-row input {
+      flex: 1;
+      padding: 10px 14px;
+      font-size: 0.95rem;
+    }
+
+    .kw-add-btn {
+      flex-shrink: 0;
+      padding: 10px 20px;
+      font-size: 0.95rem;
+    }
+
+    .kw-empty-note {
+      font-size: 0.88rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
     @media (max-width: 760px) {
       main {
         padding: 20px 14px 40px;
@@ -492,6 +660,96 @@
             </article>
           </div>
         </section>
+      </div>
+    </section>
+    <!-- ── Merge Workbooks panel ── -->
+    <section class="panel" aria-labelledby="mergePanelTitle" style="margin-top:32px;">
+      <header class="hero">
+        <p class="eyebrow">Step 2</p>
+        <h1 id="mergePanelTitle">Merge into Master Workbook</h1>
+        <p>Upload the cleaned output file from the cleaner above, then upload the master destination workbook you want to merge it into. Columns are matched by exact header name and new rows are appended below the existing data.</p>
+      </header>
+
+      <div class="content">
+        <div class="support-note" aria-label="Merge guidance">
+          <div><strong>Source file:</strong> the cleaned workbook produced by the cleaner (e.g. Cell_Import_Final.xlsx). The sheet named <em>DATA_AICleaned</em> or <em>DATA_Final</em> is used automatically.</div>
+          <div><strong>Destination file:</strong> your master workbook. Data is appended below the last row — existing data is never overwritten.</div>
+          <div><strong>Column matching:</strong> exact header strings only. Columns in the destination with no match in the source are left blank or carry formulas forward.</div>
+        </div>
+
+        <form id="mergeForm" novalidate>
+          <div class="form-grid">
+            <div class="field full">
+              <label for="mergeSource">Cleaned source workbooks (up to 3)</label>
+              <input id="mergeSource" name="source_workbooks" type="file" accept=".xlsx,.xlsm,.xltx,.xltm" multiple required>
+              <p class="field-help">Select up to 3 cleaned output files (e.g. Cell_Import_Final.xlsx, Module_Import_Final.xlsx, Wafer_Import_Final.xlsx). Each is merged into the destination in order.</p>
+            </div>
+
+            <div class="field full">
+              <label for="mergeDest">Destination master workbook</label>
+              <input id="mergeDest" name="dest_workbook" type="file" accept=".xlsx,.xlsm,.xltx,.xltm" required>
+              <p class="field-help">The workbook you want to append the cleaned data into.</p>
+            </div>
+          </div>
+
+          <details class="optional-fields">
+            <summary>Advanced options</summary>
+            <div class="form-grid">
+              <div class="field full">
+                <label for="mergeDestSheet">Destination sheet name</label>
+                <input id="mergeDestSheet" name="dest_sheet_name" type="text" maxlength="120" placeholder="Leave blank for active sheet">
+                <p class="field-help">The sheet in the destination workbook to merge into.</p>
+              </div>
+            </div>
+          </details>
+
+          <div class="actions">
+            <button id="mergeButton" type="submit">Merge data</button>
+          </div>
+
+          <div id="mergeStatus" class="status" role="status" aria-live="polite"></div>
+        </form>
+
+        <section id="mergeResults" class="results" hidden>
+          <div class="results-header">
+            <h2>Merge results</h2>
+            <p id="mergeMessage" class="result-copy"></p>
+          </div>
+
+          <div class="results-grid">
+            <article class="results-card">
+              <h3>Download</h3>
+              <div id="mergeDownload" class="downloads"></div>
+              <p id="mergeExpiry" class="expiry-note"></p>
+            </article>
+            <article class="results-card">
+              <h3>Summary</h3>
+              <div id="mergeSummary" class="summary-grid"></div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </section>
+    <!-- ── Keyword Editor panel ── -->
+    <section class="panel" aria-labelledby="kwPanelTitle" style="margin-top:32px;">
+      <header class="hero">
+        <p class="eyebrow">Optional</p>
+        <h1 id="kwPanelTitle">Keyword Editor</h1>
+        <p>View the built-in filter keywords for each cleaner and add your own. Custom keywords are saved permanently and applied automatically the next time the cleaner runs. Built-in keywords can only be changed by editing the script directly.</p>
+      </header>
+
+      <div class="content">
+        <div class="field" style="margin-bottom:26px;">
+          <label for="kwCleanerType">Select cleaner to view keywords</label>
+          <select id="kwCleanerType">
+            <option value="wafer">Wafer Imports</option>
+            <option value="cell">Cell Imports</option>
+            <option value="module">Module Imports</option>
+          </select>
+        </div>
+
+        <div id="kwLists"></div>
+        <div id="kwStatus" class="status" role="status" aria-live="polite"></div>
       </div>
     </section>
   </main>
@@ -966,6 +1224,417 @@
     });
 
     applyTranslations();
+  </script>
+
+  <!-- ── Merge Workbooks panel ── -->
+  <script>
+    (function () {
+      const mergeForm     = document.getElementById("mergeForm");
+      const mergeSource   = document.getElementById("mergeSource");
+      const mergeDest     = document.getElementById("mergeDest");
+      const mergeStatus   = document.getElementById("mergeStatus");
+      const mergeResults  = document.getElementById("mergeResults");
+      const mergeDownload = document.getElementById("mergeDownload");
+      const mergeSummary  = document.getElementById("mergeSummary");
+      const mergeMsg      = document.getElementById("mergeMessage");
+      const mergeBtn      = document.getElementById("mergeButton");
+      const mergeExpiry   = document.getElementById("mergeExpiry");
+
+      const allowedExts = ["xlsx", "xlsm", "xltx", "xltm"];
+
+      function isExcel(file) {
+        if (!file || !file.name.includes(".")) return false;
+        return allowedExts.includes(file.name.split(".").pop().toLowerCase());
+      }
+
+      function showMergeStatus(msg, tone) {
+        mergeStatus.textContent = msg;
+        mergeStatus.className = `status visible ${tone}`;
+      }
+
+      function clearMergeStatus() {
+        mergeStatus.textContent = "";
+        mergeStatus.className = "status";
+      }
+
+      function setBusyMerge(busy) {
+        mergeBtn.disabled = busy;
+        mergeSource.disabled = busy;
+        mergeDest.disabled = busy;
+        document.getElementById("mergeDestSheet").disabled = busy;
+        mergeBtn.textContent = busy ? "Merging data…" : "Merge data";
+      }
+
+      mergeForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        mergeResults.hidden = true;
+        clearMergeStatus();
+
+        const srcFiles = Array.from(mergeSource.files || []);
+        const dst = mergeDest.files?.[0];
+
+        if (srcFiles.length === 0 || !dst) {
+          showMergeStatus("Choose at least one source file and a destination workbook.", "error");
+          return;
+        }
+        if (srcFiles.length > 3) {
+          showMergeStatus("Select up to 3 source workbooks at a time.", "error");
+          return;
+        }
+        if (srcFiles.some(f => !isExcel(f)) || !isExcel(dst)) {
+          showMergeStatus("All files must be Excel workbooks (.xlsx, .xlsm, .xltx, .xltm).", "error");
+          return;
+        }
+
+        const fd = new FormData();
+        srcFiles.forEach(f => fd.append("source_workbooks", f));
+        fd.append("dest_workbook", dst);
+
+        const destSheet = document.getElementById("mergeDestSheet").value.trim();
+        if (destSheet) fd.append("dest_sheet_name", destSheet);
+
+        let pollTimer = null;
+
+        function stopPolling() {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        }
+
+        async function pollMergeStatus(jobId) {
+          try {
+            const resp = await fetch(`/merge-status/${jobId}`);
+            if (!resp.ok) { throw new Error(`Status check failed (${resp.status}).`); }
+            const data = await resp.json();
+
+            if (data.status === "complete") {
+              stopPolling();
+              mergeResults.hidden = false;
+              renderMergeResults(data);
+              const added   = data.summary?.find(s => s.label === "Total rows added")?.value ?? "?";
+              const matched = data.summary?.find(s => s.label === "Matched columns")?.value  ?? "?";
+              showMergeStatus(`Merge complete — ${added} row(s) added, ${matched} column(s) matched. Download your file below.`, "success");
+              setBusyMerge(false);
+            } else if (data.status === "error") {
+              stopPolling();
+              showMergeStatus(data.message || "Merge failed.", "error");
+              setBusyMerge(false);
+            }
+            // still "processing" — keep polling
+          } catch (err) {
+            stopPolling();
+            showMergeStatus(err.message || "Lost contact with server.", "error");
+            setBusyMerge(false);
+          }
+        }
+
+        function renderMergeResults(data) {
+          mergeDownload.innerHTML = "";
+          mergeSummary.innerHTML = "";
+
+          const url  = data.download_url  || (data.downloads?.[0]?.url);
+          const name = data.download_name || (data.downloads?.[0]?.name);
+          if (url) {
+            const a = document.createElement("a");
+            a.className = "download-link";
+            a.href = url; a.download = name || "merged.xlsx";
+            a.target = "_blank"; a.rel = "noopener";
+            const lbl = document.createElement("span"); lbl.textContent = "Download merged workbook";
+            const nm  = document.createElement("strong"); nm.textContent = name || "merged.xlsx";
+            a.append(lbl, nm);
+            mergeDownload.appendChild(a);
+          }
+
+          (data.summary || []).forEach(item => {
+            const card = document.createElement("div"); card.className = "summary-item";
+            const lbl  = document.createElement("div"); lbl.className = "summary-label"; lbl.textContent = item.label;
+            const val  = document.createElement("strong"); val.className = "summary-value"; val.textContent = item.value;
+            card.append(lbl, val);
+            mergeSummary.appendChild(card);
+          });
+
+          mergeMsg.textContent = data.message || "Merge complete.";
+          if (data.expires_at) {
+            mergeExpiry.textContent = `Download link held temporarily until ${new Date(data.expires_at).toLocaleString()}.`;
+          } else {
+            mergeExpiry.textContent = "Download link held temporarily by the service.";
+          }
+        }
+
+        try {
+          setBusyMerge(true);
+          const plural = srcFiles.length > 1 ? `${srcFiles.length} files` : "1 file";
+          showMergeStatus(`Uploading ${plural} — processing will begin shortly…`, "info");
+
+          const resp = await fetch("/upload-merge-workbooks", { method: "POST", body: fd });
+          const ct = resp.headers.get("content-type") || "";
+          const payload = ct.includes("application/json") ? await resp.json() : { message: await resp.text() };
+
+          if (!resp.ok) {
+            let detail = payload?.detail;
+            let msg;
+            if (typeof detail === "string") { msg = detail; }
+            else if (Array.isArray(detail)) { msg = detail.map(e => `${e.loc?.join(".")}: ${e.msg}`).join("; "); }
+            else { msg = payload?.message || `Request failed with status ${resp.status}.`; }
+            throw new Error(msg);
+          }
+
+          const jobId = payload.job_id;
+          showMergeStatus(`Files uploaded. Merging ${plural} in the background — please wait…`, "info");
+          pollTimer = setInterval(() => pollMergeStatus(jobId), 2500);
+        } catch (err) {
+          showMergeStatus(err.message || "Something went wrong.", "error");
+          setBusyMerge(false);
+        }
+      });
+    })();
+  </script>
+  <!-- ── Keyword Editor JS ── -->
+  <script>
+    (function () {
+      const kwCleanerType = document.getElementById("kwCleanerType");
+      const kwLists       = document.getElementById("kwLists");
+      const kwStatus      = document.getElementById("kwStatus");
+
+      function showKwStatus(msg, tone) {
+        kwStatus.textContent = msg;
+        kwStatus.className = `status visible ${tone}`;
+        setTimeout(() => { kwStatus.className = "status"; }, 4000);
+      }
+
+      function buildTag(keyword, type, onAction) {
+        // type: "builtin" | "custom" | "removed"
+        const tag = document.createElement("span");
+        tag.className = `kw-tag kw-tag--${type}`;
+        tag.textContent = keyword;
+        if (type === "builtin" || type === "custom") {
+          const btn = document.createElement("button");
+          btn.className = "kw-remove";
+          btn.type = "button";
+          btn.textContent = "×";
+          btn.title = type === "builtin" ? "Remove this built-in keyword" : "Remove this keyword";
+          btn.addEventListener("click", () => onAction(tag, keyword));
+          tag.appendChild(btn);
+        } else if (type === "removed") {
+          const btn = document.createElement("button");
+          btn.className = "kw-remove";
+          btn.type = "button";
+          btn.textContent = "↩";
+          btn.title = "Restore this keyword";
+          btn.style.fontSize = "0.9rem";
+          btn.addEventListener("click", () => onAction(tag, keyword));
+          tag.appendChild(btn);
+        }
+        return tag;
+      }
+
+      function buildListSection(cleanerType, listData) {
+        const section = document.createElement("div");
+        section.className = "kw-list-section";
+
+        const divider = document.createElement("div");
+        divider.className = "section-divider";
+        divider.textContent = listData.label;
+        section.appendChild(divider);
+
+        const help = document.createElement("p");
+        help.className = "kw-help";
+        help.textContent = listData.help;
+        section.appendChild(help);
+
+        // ── Active built-in keywords (with × to remove) ──
+        const activeBuiltins = listData.builtin.filter(kw => !listData.removed.includes(kw));
+        const builtinWrap = document.createElement("div");
+        builtinWrap.className = "kw-builtin-wrap";
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = `Built-in keywords (${activeBuiltins.length}) — click × to remove`;
+        details.appendChild(summary);
+        const builtinTags = document.createElement("div");
+        builtinTags.className = "kw-tags";
+
+        async function removeBuiltin(tagEl, keyword) {
+          tagEl.style.opacity = "0.4";
+          try {
+            const resp = await fetch(
+              `/keywords/${cleanerType}/${listData.name}?keyword=${encodeURIComponent(keyword)}`,
+              { method: "DELETE" }
+            );
+            if (!resp.ok) throw new Error(`Delete failed (${resp.status})`);
+            tagEl.remove();
+            summary.textContent = `Built-in keywords (${builtinTags.querySelectorAll(".kw-tag--builtin").length}) — click × to remove`;
+            // Add to removed section
+            const note = removedTagsEl.querySelector(".kw-empty-note");
+            if (note) note.remove();
+            removedTagsEl.appendChild(buildTag(keyword, "removed", restoreBuiltin));
+            removedDetails.open = true;
+            showKwStatus(`Removed "${keyword}" — it will no longer filter rows.`, "success");
+          } catch (err) {
+            tagEl.style.opacity = "1";
+            showKwStatus(err.message || "Could not remove keyword.", "error");
+          }
+        }
+
+        activeBuiltins.forEach(kw => builtinTags.appendChild(buildTag(kw, "builtin", removeBuiltin)));
+        details.appendChild(builtinTags);
+        builtinWrap.appendChild(details);
+        section.appendChild(builtinWrap);
+
+        // ── Removed built-ins (with ↩ to restore) ──
+        const removedWrap = document.createElement("div");
+        removedWrap.className = "kw-builtin-wrap";
+        removedWrap.style.marginTop = "10px";
+        const removedDetails = document.createElement("details");
+        const removedSummary = document.createElement("summary");
+        removedSummary.textContent = `Removed built-in keywords (${listData.removed.length}) — click ↩ to restore`;
+        removedDetails.appendChild(removedSummary);
+        const removedTagsEl = document.createElement("div");
+        removedTagsEl.className = "kw-tags";
+
+        async function restoreBuiltin(tagEl, keyword) {
+          tagEl.style.opacity = "0.4";
+          try {
+            const resp = await fetch(`/keywords/${cleanerType}/${listData.name}/restore`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ keyword }),
+            });
+            if (!resp.ok) throw new Error(`Restore failed (${resp.status})`);
+            tagEl.remove();
+            const remaining = removedTagsEl.querySelectorAll(".kw-tag--removed").length;
+            removedSummary.textContent = `Removed built-in keywords (${remaining}) — click ↩ to restore`;
+            if (remaining === 0) {
+              const note = document.createElement("span");
+              note.className = "kw-empty-note";
+              note.textContent = "No removed built-in keywords.";
+              removedTagsEl.appendChild(note);
+            }
+            builtinTags.appendChild(buildTag(keyword, "builtin", removeBuiltin));
+            summary.textContent = `Built-in keywords (${builtinTags.querySelectorAll(".kw-tag--builtin").length}) — click × to remove`;
+            showKwStatus(`Restored "${keyword}".`, "success");
+          } catch (err) {
+            tagEl.style.opacity = "1";
+            showKwStatus(err.message || "Could not restore keyword.", "error");
+          }
+        }
+
+        if (listData.removed.length === 0) {
+          const note = document.createElement("span");
+          note.className = "kw-empty-note";
+          note.textContent = "No removed built-in keywords.";
+          removedTagsEl.appendChild(note);
+        } else {
+          listData.removed.forEach(kw => removedTagsEl.appendChild(buildTag(kw, "removed", restoreBuiltin)));
+        }
+        removedDetails.appendChild(removedTagsEl);
+        removedWrap.appendChild(removedDetails);
+        section.appendChild(removedWrap);
+
+        // ── Custom keywords (with × to delete) ──
+        const customLabel = document.createElement("div");
+        customLabel.className = "kw-custom-label";
+        customLabel.style.marginTop = "16px";
+        customLabel.textContent = "Your custom additions:";
+        section.appendChild(customLabel);
+
+        const customTagsEl = document.createElement("div");
+        customTagsEl.className = "kw-tags";
+
+        async function removeCustom(tagEl, keyword) {
+          tagEl.style.opacity = "0.4";
+          try {
+            const resp = await fetch(
+              `/keywords/${cleanerType}/${listData.name}?keyword=${encodeURIComponent(keyword)}`,
+              { method: "DELETE" }
+            );
+            if (!resp.ok) throw new Error(`Delete failed (${resp.status})`);
+            tagEl.remove();
+            if (customTagsEl.querySelectorAll(".kw-tag--custom").length === 0) {
+              const note = document.createElement("span");
+              note.className = "kw-empty-note";
+              note.textContent = "No custom keywords yet.";
+              customTagsEl.appendChild(note);
+            }
+            showKwStatus(`Removed "${keyword}".`, "success");
+          } catch (err) {
+            tagEl.style.opacity = "1";
+            showKwStatus(err.message || "Could not remove keyword.", "error");
+          }
+        }
+
+        if (listData.custom.length === 0) {
+          const note = document.createElement("span");
+          note.className = "kw-empty-note";
+          note.textContent = "No custom keywords yet.";
+          customTagsEl.appendChild(note);
+        } else {
+          listData.custom.forEach(kw => customTagsEl.appendChild(buildTag(kw, "custom", removeCustom)));
+        }
+        section.appendChild(customTagsEl);
+
+        // ── Add row ──
+        const addRow = document.createElement("div");
+        addRow.className = "kw-add-row";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = "Type a keyword to add…";
+        input.maxLength = 120;
+        const addBtn = document.createElement("button");
+        addBtn.type = "button";
+        addBtn.className = "kw-add-btn";
+        addBtn.textContent = "+ Add";
+
+        async function addKeyword() {
+          const kw = input.value.trim();
+          if (!kw) { showKwStatus("Type a keyword first.", "error"); return; }
+          addBtn.disabled = true;
+          try {
+            const resp = await fetch(`/keywords/${cleanerType}/${listData.name}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ keyword: kw }),
+            });
+            if (!resp.ok) {
+              const payload = await resp.json().catch(() => ({}));
+              throw new Error(payload.detail || `Request failed (${resp.status})`);
+            }
+            const note = customTagsEl.querySelector(".kw-empty-note");
+            if (note) note.remove();
+            customTagsEl.appendChild(buildTag(kw, "custom", removeCustom));
+            input.value = "";
+            showKwStatus(`Added "${kw}" to ${listData.label}.`, "success");
+          } catch (err) {
+            showKwStatus(err.message || "Could not add keyword.", "error");
+          } finally {
+            addBtn.disabled = false;
+          }
+        }
+
+        addBtn.addEventListener("click", addKeyword);
+        input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addKeyword(); } });
+        addRow.append(input, addBtn);
+        section.appendChild(addRow);
+
+        return section;
+      }
+
+      async function loadKeywords() {
+        const cleanerType = kwCleanerType.value;
+        kwLists.innerHTML = "";
+        kwStatus.className = "status";
+        try {
+          const resp = await fetch(`/keywords/${cleanerType}`);
+          if (!resp.ok) throw new Error(`Failed to load keywords (${resp.status})`);
+          const data = await resp.json();
+          data.lists.forEach(listData => {
+            kwLists.appendChild(buildListSection(cleanerType, listData));
+          });
+        } catch (err) {
+          showKwStatus(err.message || "Could not load keywords.", "error");
+        }
+      }
+
+      kwCleanerType.addEventListener("change", loadKeywords);
+      loadKeywords();
+    })();
   </script>
 </body>
 </html>
