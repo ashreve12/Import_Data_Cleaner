@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import zipfile
 from copy import copy
@@ -8,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Border, Font, Side
 from openpyxl.utils import get_column_letter
 
 
@@ -16,182 +17,99 @@ DEFAULT_SOURCE_FILE_NAME = "Module_Raw_AI.xlsx"
 DEFAULT_OUTPUT_DIR_NAME = "AI Output"
 EXCEL_FILE_PATTERNS = "*.xlsx *.xlsm *.xltx *.xltm"
 FINAL_OUTPUT_FILE_NAME = "Module_Import_Final.xlsx"
+FINAL_OUTPUT_SHEET_NAME = "DATA_AICleaned"
 STEP_FILE_NAMES = {
     "step1": "Step 1.xlsx",
     "step2": "Step 2.xlsx",
 }
 
 STEP1_COLUMN_ORDER = [
-    "date",
-    "estimated date",
-    "hs code",
-    "hs description",
-    "country of origin",
-    "quantity",
-    "quantity unit",
-    "metric tons",
-    "kilograms",
-    "month",
-    "consignee declared",
-    "shipper declared",
-    "master consignee (unified)",
-    "master shipper",
-    "notify name",
-    "notify address",
-    "master notify name",
-    "master notify address",
-    "master shipper address",
-    "consignee (unified)",
-    "consignee (consolidated)",
-    "shipper (unified)",
-    "world region by country of origin",
-    "world region by place of receipt",
-    "consignee type",
-    "state of port of arrival",
-    "port of arrival",
-    "us region",
-    "consignee city",
-    "consignee county",
-    "in transit",
-    "bill of lading nbr.",
-    "short container description",
-    "master short container description",
+    "date", "estimated date", "hs code", "hs description", "country of origin",
+    "quantity", "quantity unit", "metric tons", "kilograms", "month",
+    "consignee declared", "shipper declared", "master consignee (unified)",
+    "master shipper", "notify name", "notify address", "master notify name",
+    "master notify address", "master shipper address", "consignee (unified)",
+    "consignee (consolidated)", "shipper (unified)", "world region by country of origin",
+    "world region by place of receipt", "consignee type", "state of port of arrival",
+    "port of arrival", "us region", "consignee city", "consignee county", "in transit",
+    "bill of lading nbr.", "short container description", "master short container description",
+    "consignee declared address", "consignee telephone", "consignee email",
+    "shipper declared address", "carrier", "master consignee declared address",
+    "consignee duns", "consignee dom. ult. duns", "consignee state", "consignee zip code",
+    "master/house", "mode of transport", "in bond entry type", "imo code", "bill master",
+    "hs code (2)", "hs code (4)", "foreign destination", "world region by port of departure",
+    "country by port of departure", "port of departure", "vessel", "vessel country",
+    "final destination", "place of receipt", "country by place of receipt", "weight",
+    "weight unit", "measure", "measure unit", "container quantity", "fcl/lcl",
+    "calculated value by hs (hs)", "calculated value by hs (teus)",
+    "calculated value by hs (container quantity)", "calculated value by hs (metric tons)",
 ]
 STEP1_COLUMN_ORDER_SET = set(STEP1_COLUMN_ORDER)
-STEP1_COLUMNS_TO_DELETE = {
-    "carrier code",
-    "bill master carrier",
-    "imo code declared",
-    "high cube",
-}
+STEP1_COLUMNS_TO_DELETE = {"carrier code", "bill master carrier", "imo code declared", "high cube"}
 
 # Step 2 Rule 1 — remove rows whose Consignee Declared or Shipper Declared
 # contains any of these names (normalized substring match).
-STEP2_COMPANY_EXCLUSIONS = [
+def _get_keywords(list_name: str, builtin: list) -> list:
+    path = Path(__file__).parent.parent / "keywords.json"
+    if not path.exists():
+        return builtin
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        entry = data.get("module", {}).get(list_name, {})
+        if isinstance(entry, list):
+            return builtin + entry
+        custom = entry.get("custom", [])
+        removed = set(entry.get("removed", []))
+        return [kw for kw in builtin if kw not in removed] + custom
+    except Exception:
+        return builtin
+
+
+STEP2_COMPANY_EXCLUSIONS = _get_keywords("company_exclusions", [
     "extrusion",
     "SEOUL",
     "VON ARDENNE",
     "FHR ANLAGENBAU",
-]
+])
 
 # Step 2 Rule 2 — keep only rows whose Short Container Description OR
-# Master Short Container Description contains at least one of these terms
-# (normalized substring match).
+# Master Short Container Description contains at least one of these terms.
 STEP2_POSITIVE_TERMS = [
     "module",
     "solar module",
     "photovoltaic module",
+    "photovoltaic cell",
     "panel",
     "solar panel",
 ]
 
 # Step 2 Rule 3 — remove rows whose Short Container Description contains any
-# of these keywords (normalized substring match).
-# LED, EVA, and USB are handled separately with boundary-aware regex.
-STEP2_EXCLUSION_KEYWORDS = [
-    "accessory",
-    "alum",
-    "amorphous",
-    "amplifier",
-    "apparatus",
-    "baby",
-    "battery",
-    "boxes",
-    "branket",
-    "bug trap",
-    "camera",
-    "carrier",
-    "cell",
-    "charger",
-    "chip",
-    "circuit",
-    "clay",
-    "conditioner",
-    "conduct",
-    "connector",
-    "construction",
-    "controller",
-    "convertor",
-    "cooking",
-    "coupler",
-    "children",
-    "crystal",
-    "current",
-    "daughter card",
-    "decoration",
-    "doors",
-    "electronic products",
-    "emitting",
-    "equipment",
-    "flexible",
-    "foil",
-    "fold",
-    "fountain",
-    "frame",
-    "furniture",
-    "glass",
-    "hand wash",
-    "heat",
-    "heater",
-    "igniter",
-    "infrared",
-    "insulation",
-    "inverter",
-    "jewelry",
-    "junction",
-    "kit",
-    "laminator",
-    "lamping",
-    "laser",
-    "light",
-    "lithium",
-    "machine",
-    "material",
-    "men's",
-    "mount",
-    "mounting",
-    "neutral bar",
-    "off-grid",
-    "outdoor",
-    "packaging",
-    "part",
-    "photo cell",
-    "photocell",
-    "piezo",
-    "plastic",
-    "portable",
-    "power supply",
-    "power",
-    "rectifier",
-    "rubber",
-    "scissor",
-    "seal",
-    "semiconductor",
-    "sensor",
-    "shaver",
-    "simulator",
-    "smart",
-    "solar light",
-    "steel",
-    "supply",
-    "system",
-    "thyristor",
-    "tool",
-    "tracking",
-    "transducer",
-    "transformer",
-    "transitor",
-    "tshirt",
-    "tube",
-    "underwear",
-    "wire",
-]
-
-# These three are matched with word-boundary regex on the original text to avoid
-# false positives (e.g. "FLED" for "LED", "EVALUATE" for "EVA").
-STEP2_BOUNDARY_EXCLUSIONS = ["LED", "EVA", "USB"]
+# of these keywords. LED, EVA, and USB use boundary-aware regex.
+STEP2_EXCLUSION_KEYWORDS = _get_keywords("description_keywords", [
+    "accessory", "accessories", "additive", "aluminum", "amorphous", "amplifier",
+    "apparatus", "baby", "backsheet", "battery", "boxes", "bracket", "branket",
+    "bug trap", "camera", "carrier", "charger", "chip", "circuit", "clay",
+    "cleaning", "coil", "conditioner", "connector", "construction", "control",
+    "controller", "conduct", "convertor", "cooking", "coupler", "children",
+    "crystal", "current", "daughter card", "decoration", "diodes", "doors",
+    "electronic products", "encoder", "emitting", "equipment", "filter", "film",
+    "flexible", "foil", "fold", "for solar", "fountain", "frame", "furniture",
+    "glass", "hand wash", "heat", "heater", "igniter", "infrared", "insulation",
+    "inverter", "igbt", "junction", "jewelry", "kit", "laminator", "lamping",
+    "laser", "light", "lithium", "machine", "main amp", "material", "men's",
+    "mount", "mounting", "neutral bar", "off-grid", "outdoor", "packaging",
+    "part", "plastic", "portable", "polyester", "power", "piezo", "photocell",
+    "photo cell", "production line", "rectifier", "rubber", "ribbon", "scissor",
+    "seal", "sealing", "semiconductor", "sensor", "shaver", "simulator", "smart",
+    "solar light", "sport", "steel", "supply", "system", "thyristor", "tool",
+    "toy", "tracking", "transducer", "transformer", "transistor", "tshirt",
+    "t-shirt", "tube", "underwear", "wire",
+])
+STEP2_BOUNDARY_EXCLUSIONS = _get_keywords("boundary_exclusions", ["LED", "EVA", "USB"])
 
 HS_CODE_REGEX = re.compile(r"(?<!\d)\d{6}(?!\d)")
+_THIN = Side(style="thin")
+_ALL_BORDERS = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 
 
 def sanitize_file_component(value: str) -> str:
@@ -200,13 +118,6 @@ def sanitize_file_component(value: str) -> str:
 
 
 def normalize(value: object) -> str:
-    """Uppercase and strip every non-alphanumeric character.
-
-    Allows matching across punctuation, hyphens, and mid-word spaces:
-      "PAN EL"      → "PANEL"
-      "VON-ARDENNE" → "VONARDENNE"  (matches normalized "VON ARDENNE")
-      "tracki ng"   → "TRACKING"
-    """
     return re.sub(r"[^A-Z0-9]+", "", str(value or "").upper())
 
 
@@ -222,17 +133,11 @@ def header_key(value: object) -> str:
 
 
 def norm_contains(cell_value: object, keyword: str) -> bool:
-    """Return True if normalize(cell_value) contains normalize(keyword)."""
     nk = normalize(keyword)
     return bool(nk) and nk in normalize(cell_value)
 
 
-# ---------------------------------------------------------------------------
-# Step 2 — three deterministic rules applied in order
-# ---------------------------------------------------------------------------
-
 def _excluded_by_company(consignee: object, shipper: object) -> bool:
-    """Rule 1: remove if Consignee Declared or Shipper Declared matches."""
     for pattern in STEP2_COMPANY_EXCLUSIONS:
         if norm_contains(consignee, pattern) or norm_contains(shipper, pattern):
             return True
@@ -240,7 +145,6 @@ def _excluded_by_company(consignee: object, shipper: object) -> bool:
 
 
 def _has_positive_term(short_desc: object, master_desc: object) -> bool:
-    """Rule 2: keep only if either description column contains a positive term."""
     for term in STEP2_POSITIVE_TERMS:
         if norm_contains(short_desc, term) or norm_contains(master_desc, term):
             return True
@@ -248,7 +152,6 @@ def _has_positive_term(short_desc: object, master_desc: object) -> bool:
 
 
 def _excluded_by_keyword(short_desc: object) -> bool:
-    """Rule 3: remove if Short Container Description contains an exclusion keyword."""
     for keyword in STEP2_EXCLUSION_KEYWORDS:
         if norm_contains(short_desc, keyword):
             return True
@@ -259,12 +162,7 @@ def _excluded_by_keyword(short_desc: object) -> bool:
     return False
 
 
-def row_passes_step2(
-    short_desc: object,
-    master_desc: object,
-    shipper: object,
-    consignee: object,
-) -> bool:
+def row_passes_step2(short_desc: object, master_desc: object, shipper: object, consignee: object) -> bool:
     if _excluded_by_company(consignee, shipper):
         return False
     if not _has_positive_term(short_desc, master_desc):
@@ -273,10 +171,6 @@ def row_passes_step2(
         return False
     return True
 
-
-# ---------------------------------------------------------------------------
-# Workbook helpers
-# ---------------------------------------------------------------------------
 
 def create_zip_bundle(zip_path: Path, files_to_zip: list[Path]) -> Path:
     zip_path.parent.mkdir(parents=True, exist_ok=True)
@@ -302,7 +196,6 @@ def save_workbook(workbook: Workbook, preferred_path: Path) -> Path:
 def create_paths_for_run(source_path: Path, output_dir: Path, zip_name: str | None = None) -> dict[str, Path]:
     safe_stem = sanitize_file_component(source_path.stem)
     zip_stem = sanitize_file_component(Path(zip_name).stem) if zip_name else f"{safe_stem}_step_outputs"
-
     return {
         "output_dir": output_dir,
         "output_file": output_dir / FINAL_OUTPUT_FILE_NAME,
@@ -352,14 +245,11 @@ def prompt_for_existing_file(prompt_text: str, default_path: Path | None) -> Pat
         suffix = f" [{default_path}]" if default_path else ""
         raw_value = input(f"{prompt_text}{suffix}: ").strip().strip('"')
         chosen_path = Path(raw_value).expanduser() if raw_value else default_path
-
         if chosen_path is None:
             print("A source workbook is required.")
             continue
-
         if chosen_path.is_file():
             return chosen_path
-
         print(f"File not found: {chosen_path}")
 
 
@@ -368,15 +258,12 @@ def prompt_for_directory(prompt_text: str, default_path: Path | None) -> Path:
         suffix = f" [{default_path}]" if default_path else ""
         raw_value = input(f"{prompt_text}{suffix}: ").strip().strip('"')
         chosen_path = Path(raw_value).expanduser() if raw_value else default_path
-
         if chosen_path is None:
             print("An output folder is required.")
             continue
-
         if chosen_path.exists() and not chosen_path.is_dir():
             print(f"Path is not a folder: {chosen_path}")
             continue
-
         try:
             chosen_path.mkdir(parents=True, exist_ok=True)
             return chosen_path
@@ -390,15 +277,12 @@ def resolve_source_file(source_arg: str | None, workspace_root: Path, use_dialog
         if not source_path.is_file():
             raise FileNotFoundError(f"Source file not found: {source_path}")
         return source_path
-
     default_source = workspace_root / "AI Source" / DEFAULT_SOURCE_FILE_NAME
     initial_dir = default_source.parent if default_source.parent.exists() else workspace_root
-
     if use_dialogs:
         selected_path = open_file_dialog(initial_dir)
         if selected_path:
             return selected_path
-
     fallback_default = default_source if default_source.exists() else None
     return prompt_for_existing_file("Enter the source workbook path", fallback_default)
 
@@ -408,39 +292,39 @@ def resolve_output_directory(output_dir_arg: str | None, workspace_root: Path, u
         output_dir = Path(output_dir_arg).expanduser()
         output_dir.mkdir(parents=True, exist_ok=True)
         return output_dir
-
     default_output_dir = workspace_root / DEFAULT_OUTPUT_DIR_NAME
     initial_dir = default_output_dir if default_output_dir.exists() else workspace_root
-
     if use_dialogs:
         selected_path = open_directory_dialog(initial_dir)
         if selected_path:
             selected_path.mkdir(parents=True, exist_ok=True)
             return selected_path
-
     return prompt_for_directory("Enter the output folder path", default_output_dir)
 
 
 def get_required_columns(ws) -> dict[str, int]:
     headers: dict[str, int] = {}
-    for column_index in range(1, ws.max_column + 1):
-        normalized = header_key(ws.cell(row=1, column=column_index).value)
-        if normalized and normalized not in headers:
-            headers[normalized] = column_index
-
-    required = {
-        "hs_code": "hs code",
-        "consignee_declared": "consignee declared",
-        "shipper_declared": "shipper declared",
-        "short_container_description": "short container description",
-        "master_short_container_description": "master short container description",
+    for col_idx in range(1, ws.max_column + 1):
+        key = header_key(ws.cell(row=1, column=col_idx).value)
+        if key and key not in headers:
+            headers[key] = col_idx
+    for name in ("hs code", "consignee declared", "shipper declared"):
+        if name not in headers:
+            raise ValueError(f"Missing required column: {name}")
+    short_desc_name = next((n for n in ("short container description", "description") if n in headers), None)
+    if short_desc_name is None:
+        raise ValueError("Missing required column: short container description (or description)")
+    master_desc_name = next(
+        (n for n in ("master short container description", "short container description", "description") if n in headers),
+        short_desc_name,
+    )
+    return {
+        "hs_code": headers["hs code"],
+        "consignee_declared": headers["consignee declared"],
+        "shipper_declared": headers["shipper declared"],
+        "short_container_description": headers[short_desc_name],
+        "master_short_container_description": headers[master_desc_name],
     }
-
-    missing = [display_name for display_name in required.values() if display_name not in headers]
-    if missing:
-        raise ValueError(f"Missing required columns: {', '.join(missing)}")
-
-    return {key: headers[value] for key, value in required.items()}
 
 
 def compute_column_order(ws) -> list[int]:
@@ -471,7 +355,7 @@ def build_snapshot_workbook(
     source_ws,
     rows_to_keep: list[int],
     column_order: list[int],
-    apply_calibri: bool = False,
+    apply_formatting: bool = False,
 ) -> Workbook:
     workbook = Workbook()
     target_ws = workbook.active
@@ -491,30 +375,33 @@ def build_snapshot_workbook(
 
     all_rows = [1] + rows_to_keep
     for target_row_index, source_row_index in enumerate(all_rows, start=1):
-        source_row_dimension = source_ws.row_dimensions[source_row_index]
-        target_row_dimension = target_ws.row_dimensions[target_row_index]
-        target_row_dimension.height = source_row_dimension.height
-        target_row_dimension.hidden = source_row_dimension.hidden
+        source_row_dim = source_ws.row_dimensions[source_row_index]
+        target_row_dim = target_ws.row_dimensions[target_row_index]
+        target_row_dim.height = source_row_dim.height
+        target_row_dim.hidden = source_row_dim.hidden
 
         for target_col_idx, source_col_idx in enumerate(column_order, start=1):
             source_cell = source_ws.cell(row=source_row_index, column=source_col_idx)
             target_cell = target_ws.cell(row=target_row_index, column=target_col_idx, value=source_cell.value)
-            if source_cell.has_style:
-                if apply_calibri:
-                    src_font = source_cell.font
-                    target_cell.font = Font(
-                        name="Calibri",
-                        bold=src_font.bold,
-                        italic=src_font.italic,
-                        vertAlign=src_font.vertAlign,
-                        underline=src_font.underline,
-                        strike=src_font.strike,
-                        color=src_font.color,
-                        size=src_font.size,
-                        scheme=src_font.scheme,
-                    )
-                else:
-                    target_cell.font = copy(source_cell.font)
+
+            if apply_formatting:
+                src_font = source_cell.font if source_cell.has_style else None
+                target_cell.font = Font(
+                    name="Calibri",
+                    size=9,
+                    bold=src_font.bold if src_font else False,
+                    italic=src_font.italic if src_font else False,
+                    underline=src_font.underline if src_font else None,
+                    strike=src_font.strike if src_font else False,
+                    color=copy(src_font.color) if src_font and src_font.color else None,
+                )
+                target_cell.border = _ALL_BORDERS
+                if source_cell.has_style:
+                    target_cell.fill = copy(source_cell.fill)
+                    target_cell.alignment = copy(source_cell.alignment)
+                    target_cell.number_format = source_cell.number_format
+            elif source_cell.has_style:
+                target_cell.font = copy(source_cell.font)
                 target_cell.fill = copy(source_cell.fill)
                 target_cell.border = copy(source_cell.border)
                 target_cell.alignment = copy(source_cell.alignment)
@@ -523,7 +410,6 @@ def build_snapshot_workbook(
 
             if source_cell.hyperlink:
                 target_cell._hyperlink = copy(source_cell.hyperlink)
-
             if source_cell.comment:
                 target_cell.comment = copy(source_cell.comment)
 
@@ -541,22 +427,63 @@ def process_module_file(source_path: Path, output_path: Path, zip_output_path: P
 
     initial_rows = list(range(2, source_ws.max_row + 1))
 
-    # Step 1 filter: drop rows with more than 4 distinct HS codes.
+    # Step 1: column reorder + Calibri 9 + borders + HS code filter
     step1_rows: list[int] = []
-    for row_index in initial_rows:
-        hs_code_value = str(source_ws.cell(row=row_index, column=required_columns["hs_code"]).value or "")
-        if len(set(HS_CODE_REGEX.findall(hs_code_value))) <= 4:
-            step1_rows.append(row_index)
+    for row_idx in initial_rows:
+        hs_val = str(source_ws.cell(row=row_idx, column=required_columns["hs_code"]).value or "")
+        if len(set(HS_CODE_REGEX.findall(hs_val))) <= 4:
+            step1_rows.append(row_idx)
 
-    # Step 2 filter: apply module rules (reads from original source positions).
-    step2_rows: list[int] = []
-    for row_index in step1_rows:
-        consignee = source_ws.cell(row=row_index, column=required_columns["consignee_declared"]).value
-        shipper = source_ws.cell(row=row_index, column=required_columns["shipper_declared"]).value
-        short_desc = source_ws.cell(row=row_index, column=required_columns["short_container_description"]).value
-        master_desc = source_ws.cell(row=row_index, column=required_columns["master_short_container_description"]).value
+    step1_wb = build_snapshot_workbook(source_ws, step1_rows, column_order, apply_formatting=True)
+    step1_ws = step1_wb.active
+    saved_step1_path = save_workbook(step1_wb, output_path.parent / STEP_FILE_NAMES["step1"])
+
+    # Translate step2 row indices into step1_ws row space
+    src_to_step1: dict[int, int] = {src: i + 2 for i, src in enumerate(step1_rows)}
+    step1_col_range = list(range(1, len(column_order) + 1))
+
+    # Rebuild required column indices in step1_ws header space
+    step1_headers: dict[str, int] = {}
+    for col_idx in range(1, step1_ws.max_column + 1):
+        key = header_key(step1_ws.cell(row=1, column=col_idx).value)
+        if key and key not in step1_headers:
+            step1_headers[key] = col_idx
+    consignee_col = step1_headers.get("consignee declared", required_columns["consignee_declared"])
+    shipper_col = step1_headers.get("shipper declared", required_columns["shipper_declared"])
+    short_desc_col = (step1_headers.get("short container description")
+                      or step1_headers.get("description")
+                      or required_columns["short_container_description"])
+    master_desc_col = (step1_headers.get("master short container description")
+                       or step1_headers.get("short container description")
+                       or step1_headers.get("description")
+                       or required_columns["master_short_container_description"])
+
+    # Step 2: company exclusion + positive term keep + keyword exclusion
+    step2_rows_in_step1: list[int] = []
+    for src_row in step1_rows:
+        ws1_row = src_to_step1[src_row]
+        consignee = step1_ws.cell(row=ws1_row, column=consignee_col).value
+        shipper = step1_ws.cell(row=ws1_row, column=shipper_col).value
+        short_desc = step1_ws.cell(row=ws1_row, column=short_desc_col).value
+        master_desc = step1_ws.cell(row=ws1_row, column=master_desc_col).value
         if row_passes_step2(short_desc, master_desc, shipper, consignee):
-            step2_rows.append(row_index)
+            step2_rows_in_step1.append(ws1_row)
+
+    step2_wb = build_snapshot_workbook(step1_ws, step2_rows_in_step1, step1_col_range)
+    saved_step2_path = save_workbook(step2_wb, output_path.parent / STEP_FILE_NAMES["step2"])
+    step2_wb.close()
+
+    final_wb = build_snapshot_workbook(step1_ws, step2_rows_in_step1, step1_col_range)
+    final_wb.active.title = FINAL_OUTPUT_SHEET_NAME
+    saved_output_path = save_workbook(final_wb, output_path)
+    final_wb.close()
+
+    step1_wb.close()
+
+    saved_zip_path = create_zip_bundle(
+        zip_output_path,
+        [saved_step1_path, saved_step2_path, saved_output_path],
+    )
 
     summary: dict[str, int | str] = {
         "source_file": str(source_path),
@@ -565,41 +492,12 @@ def process_module_file(source_path: Path, output_path: Path, zip_output_path: P
         "initial_data_rows": len(initial_rows),
         "step1_removed_hs_code_rows": len(initial_rows) - len(step1_rows),
         "rows_after_step1": len(step1_rows),
-        "step2_removed_keyword_rows": len(step1_rows) - len(step2_rows),
-        "final_rows_left": len(step2_rows),
+        "step2_removed_keyword_rows": len(step1_rows) - len(step2_rows_in_step1),
+        "final_rows_left": len(step2_rows_in_step1),
+        "output_file": str(saved_output_path),
+        "zip_file": str(saved_zip_path),
+        "step_files": f"{saved_step1_path}, {saved_step2_path}",
     }
-
-    # Build Step 1 workbook from source: applies column reorder, deleted headers,
-    # freeze row, and Calibri font.
-    step1_wb = build_snapshot_workbook(source_ws, step1_rows, column_order, apply_calibri=True)
-    step1_ws = step1_wb.active
-    saved_step1_path = save_workbook(step1_wb, output_path.parent / STEP_FILE_NAMES["step1"])
-
-    # Translate step2 row indices from source-row space into step1_ws row space.
-    # step1_ws row 1 = header; row i+2 = step1_rows[i].
-    src_to_step1: dict[int, int] = {src: i + 2 for i, src in enumerate(step1_rows)}
-    step2_rows_in_step1 = [src_to_step1[r] for r in step2_rows]
-
-    # Columns in step1_ws are already sequentially ordered 1..N.
-    step1_col_range = list(range(1, len(column_order) + 1))
-
-    # Step 2 and Final are built from step1_ws so they inherit Calibri and the
-    # reordered/deleted column layout without re-applying the transformation.
-    step2_wb = build_snapshot_workbook(step1_ws, step2_rows_in_step1, step1_col_range)
-    saved_step2_path = save_workbook(step2_wb, output_path.parent / STEP_FILE_NAMES["step2"])
-    step2_wb.close()
-
-    final_wb = build_snapshot_workbook(step1_ws, step2_rows_in_step1, step1_col_range)
-    saved_output_path = save_workbook(final_wb, output_path)
-    final_wb.close()
-
-    step1_wb.close()
-
-    saved_zip_path = create_zip_bundle(zip_output_path, [saved_step1_path, saved_step2_path, saved_output_path])
-
-    summary["output_file"] = str(saved_output_path)
-    summary["zip_file"] = str(saved_zip_path)
-    summary["step_files"] = f"{saved_step1_path}, {saved_step2_path}"
 
     source_workbook.close()
     return summary
@@ -620,31 +518,18 @@ def write_run_log(log_path: Path, summary: dict[str, int | str]) -> None:
         f"- Step 2 removed (module filter): {summary['step2_removed_keyword_rows']}",
         f"- Final rows left: {summary['final_rows_left']}",
     ]
-    with log_path.open("a", encoding="utf-8") as file_handle:
-        file_handle.write("\n".join(lines) + "\n")
+    with log_path.open("a", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Filter a module workbook and save the processed file, step snapshots, and zip bundle."
     )
-    parser.add_argument(
-        "--source-file",
-        help="Path to the input Excel workbook. If omitted, the script opens a file picker or prompts for a path.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        help="Folder for the processed workbook, step snapshots, run log, and zip bundle.",
-    )
-    parser.add_argument(
-        "--zip-name",
-        help="Optional zip file name. Defaults to <source_file_name>_step_outputs.zip.",
-    )
-    parser.add_argument(
-        "--no-dialogs",
-        action="store_true",
-        help="Skip graphical file/folder pickers and use terminal prompts instead.",
-    )
+    parser.add_argument("--source-file", help="Path to the input Excel workbook.")
+    parser.add_argument("--output-dir", help="Folder for outputs.")
+    parser.add_argument("--zip-name", help="Optional zip file name.")
+    parser.add_argument("--no-dialogs", action="store_true", help="Skip graphical pickers.")
     return parser.parse_args()
 
 

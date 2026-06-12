@@ -1,4 +1,3 @@
-﻿import base64
 import json as _json
 import os
 import re
@@ -12,22 +11,18 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, List, Literal, Optional
 
-import requests
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 
 APP_DIR = Path(__file__).parent
-WORKSPACE_ROOT = APP_DIR.parents[1]
+WORKSPACE_ROOT = APP_DIR.parent  # repo root - cleaner scripts + keywords.json live inside the repo
 WAFER_SCRIPT_PATH = APP_DIR.parent / "process_wafer_workbook.py"
 CELL_SCRIPT_PATH = WORKSPACE_ROOT / "Cell Cleaner" / "process_cell_workbook.py"
 MODULE_SCRIPT_PATH = WORKSPACE_ROOT / "Module Cleaner" / "process_module_workbook.py"
 MERGE_SCRIPT_PATH = APP_DIR.parent / "process_merge_workbooks.py"
 HTML_PAGE_PATH = APP_DIR / "static" / "wafer_cleaner.html"
-MAX_FILE_BYTES = 10 * 1024 * 1024  # GPT Action return limit per file
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://wafer-cleaner-api-production.up.railway.app").rstrip("/")
-CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "your-email@example.com")
 BROWSER_JOB_TTL_HOURS = int(os.getenv("BROWSER_JOB_TTL_HOURS", "12"))
 BROWSER_JOB_STORAGE = Path(
     os.getenv(
@@ -187,44 +182,9 @@ app = FastAPI(
     version="1.2.0",
     description=(
         "Process uploaded import-data Excel workbooks and return the cleaned workbook "
-        "plus a zip bundle of step-by-step snapshots. The same deployment serves "
-        "both the ChatGPT Action flow and the browser upload flow."
+        "plus a zip bundle of step-by-step snapshots, served to the browser upload page."
     ),
-    servers=[{"url": PUBLIC_BASE_URL, "description": "Public API base URL"}],
 )
-
-
-class OpenAIFileRef(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    name: str
-    id: str
-    mime_type: str
-    download_link: str
-
-
-class RunRequest(BaseModel):
-    openaiFileIdRefs: List[OpenAIFileRef] = Field(
-        ...,
-        description="Exactly one Excel workbook uploaded by the user.",
-    )
-    zip_name: Optional[str] = Field(
-        default=None,
-        description="Optional zip filename to use for the output bundle.",
-    )
-
-
-class OpenAIFileResponseItem(BaseModel):
-    name: str
-    mime_type: str
-    content: str
-
-
-class RunResponse(BaseModel):
-    status: str
-    message: str
-    stdout: str
-    openaiFileResponse: List[OpenAIFileResponseItem]
 
 
 class BrowserSummaryItem(BaseModel):
@@ -352,53 +312,11 @@ def wafer_cleaner_page() -> str:
     return HTML_PAGE_PATH.read_text(encoding="utf-8")
 
 
-@app.get("/privacy", include_in_schema=False, response_class=HTMLResponse)
-def privacy_policy() -> str:
-    return f"""
-    <html>
-      <head>
-        <title>Privacy Policy</title>
-        <meta charset=\"utf-8\" />
-      </head>
-      <body>
-        <h1>Privacy Policy</h1>
-        <p>This service processes uploaded Excel workbooks and optional user inputs solely to run the selected import cleaner workflow and return output files.</p>
-        <p>Data processed may include uploaded workbook contents, filenames, optional zip names, and standard server logs.</p>
-        <p>Files are used only to complete the requested processing workflow and are not sold.</p>
-        <p>Data may be handled by infrastructure providers required to operate the service, including the hosting platform used to run this API.</p>
-        <p>Temporary files are created only for processing and should not be retained after the request finishes, except as needed for routine logs and platform operations.</p>
-        <p>Contact: {CONTACT_EMAIL}</p>
-      </body>
-    </html>
-    """
-
-
-def download_file(url: str, destination: Path) -> None:
-    response = requests.get(url, timeout=120)
-    response.raise_for_status()
-    destination.write_bytes(response.content)
-
-
 def newest_matching_file(folder: Path, glob_pattern: str) -> Optional[Path]:
     matches = list(folder.rglob(glob_pattern))
     if not matches:
         return None
     return max(matches, key=lambda path: path.stat().st_mtime)
-
-
-def as_openai_file(path: Path, mime_type: str) -> OpenAIFileResponseItem:
-    size = path.stat().st_size
-    if size > MAX_FILE_BYTES:
-        raise HTTPException(
-            status_code=500,
-            detail=f"{path.name} is larger than 10 MB. Use URL-based file return for larger files.",
-        )
-
-    return OpenAIFileResponseItem(
-        name=path.name,
-        mime_type=mime_type,
-        content=base64.b64encode(path.read_bytes()).decode("utf-8"),
-    )
 
 
 def ensure_cleaner_script(script_path: Path) -> None:
@@ -585,58 +503,6 @@ def resolve_browser_job_dir(job_id: str) -> Path:
         raise HTTPException(status_code=404, detail="Processing job not found.")
 
     return job_dir
-
-
-@app.post(
-    "/run-wafer-cleaner",
-    operation_id="runWaferCleaner",
-    summary="Clean a wafer workbook and return output files.",
-    description=(
-        "Clean one uploaded wafer workbook and return the processed Excel file "
-        "plus a zip bundle. The request must include exactly one workbook in "
-        "openaiFileIdRefs."
-    ),
-    response_model=RunResponse,
-)
-def run_wafer_cleaner(request: RunRequest) -> RunResponse:
-    # Original ChatGPT Action flow: keep returning files inline as base64 payloads.
-    if len(request.openaiFileIdRefs) != 1:
-        raise HTTPException(status_code=400, detail="Upload exactly one workbook.")
-
-    uploaded_file = request.openaiFileIdRefs[0]
-    if not is_excel_filename(uploaded_file.name):
-        raise HTTPException(status_code=400, detail="Please upload an Excel workbook.")
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-        source_path = temp_path / Path(uploaded_file.name).name
-        output_dir = temp_path / "output"
-
-        try:
-            download_file(uploaded_file.download_link, source_path)
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"Could not download uploaded file: {exc}") from exc
-
-        run_result = run_cleaner(source_path, output_dir, request.zip_name, WAFER_SCRIPT_PATH)
-        cleaned_workbook = run_result["cleaned_workbook"]
-        zip_bundle = run_result["zip_bundle"]
-
-        returned_files = [
-            as_openai_file(
-                cleaned_workbook,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-        ]
-
-        if zip_bundle:
-            returned_files.append(as_openai_file(zip_bundle, "application/zip"))
-
-        return RunResponse(
-            status="success",
-            message="Wafer cleaner completed successfully.",
-            stdout=run_result["stdout"][-4000:],
-            openaiFileResponse=returned_files,
-        )
 
 
 @app.post(
